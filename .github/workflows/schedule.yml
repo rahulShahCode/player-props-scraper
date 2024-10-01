@@ -27,7 +27,7 @@ jobs:
         env:
           THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
         run: |
-          python odds_script.py
+          python player_props.py
 
       - name: Commit and Push Changes
         uses: EndBug/add-and-commit@v9
