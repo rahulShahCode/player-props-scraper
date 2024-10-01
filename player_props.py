@@ -5,11 +5,25 @@ import os
 import pandas as pd
 import sqlite3
 import openpyxl
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,  # Set the logging level to INFO
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Define the log message format
+    datefmt='%Y-%m-%d %H:%M:%S',  # Define the date format
+    handlers=[
+        logging.FileHandler("scraper.log"),  # Log messages will be written to 'scraper.log'
+        logging.StreamHandler()  # Also output logs to the console
+    ]
+)
+
+logger = logging.getLogger(__name__)
 
 # Define Constants
 MY_BOOKMAKERS = ['fanduel', 'draftkings', 'espnbet', 'williamhill_us', 'betmgm', 'pinnacle']
 SELECTED_BOOK = 'pinnacle'
-ATD_DELTA = .01
+ATD_DELTA = 0.01
 API_KEY = os.getenv('THE_ODDS_API_KEY')  # Ensure this environment variable is set
 SPORTS = ['americanfootball_nfl']
 QUOTA_USED = 0
@@ -27,17 +41,21 @@ def remove_commenced_games():
     """
     Removes games from the database that have already commenced based on the current Eastern Time.
     """
-    conn = sqlite3.connect(DATABASE_NAME)
-    c = conn.cursor()
+    try:
+        conn = sqlite3.connect(DATABASE_NAME)
+        c = conn.cursor()
 
-    # Get current time in ET
-    current_time = datetime.now(pytz.timezone('US/Eastern'))
+        # Get current time in ET
+        current_time = datetime.now(pytz.timezone('US/Eastern'))
 
-    # Remove games that have already commenced
-    c.execute('DELETE FROM player_props WHERE event_commence_time < ?', (current_time,))
+        # Remove games that have already commenced
+        c.execute('DELETE FROM player_props WHERE event_commence_time < ?', (current_time,))
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
+        logger.info("Removed commenced games from the database.")
+    except Exception as e:
+        logger.error(f"Error removing commenced games: {e}")
 
 def convert_utc_to_et(utc_time_str):
     """
@@ -49,10 +67,14 @@ def convert_utc_to_et(utc_time_str):
     Returns:
         str: Converted ET time in the format "%Y-%m-%d %H:%M:%S %Z".
     """
-    utc_time = datetime.strptime(utc_time_str, "%Y-%m-%dT%H:%M:%SZ")
-    utc_time = pytz.utc.localize(utc_time)
-    et_time = utc_time.astimezone(pytz.timezone('America/New_York'))
-    return et_time.strftime("%Y-%m-%d %H:%M:%S %Z")
+    try:
+        utc_time = datetime.strptime(utc_time_str, "%Y-%m-%dT%H:%M:%SZ")
+        utc_time = pytz.utc.localize(utc_time)
+        et_time = utc_time.astimezone(pytz.timezone('America/New_York'))
+        return et_time.strftime("%Y-%m-%d %H:%M:%S %Z")
+    except Exception as e:
+        logger.error(f"Error converting UTC to ET: {e}")
+        return ""
 
 def fetch_props(eventId, sport):
     """
@@ -74,16 +96,18 @@ def fetch_props(eventId, sport):
         "oddsFormat": "american",
         "bookmakers": ','.join(MY_BOOKMAKERS)
     }
-    response = requests.get(url, params=params)
-    QUOTA_USED += int(response.headers._store.get('x-requests-last')[1])
     try:
+        response = requests.get(url, params=params)
+        quota = int(response.headers.get('x-requests-last', 0))
+        QUOTA_USED += quota
+
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as http_err:
-        print(f"HTTP error occurred while fetching props: {http_err}")
+        logger.error(f"HTTP error occurred while fetching props for event ID {eventId}: {http_err}")
         return []
     except Exception as err:
-        print(f"Other error occurred while fetching props: {err}")
+        logger.error(f"Other error occurred while fetching props for event ID {eventId}: {err}")
         return []
 
 def get_events(sport):
@@ -99,27 +123,32 @@ def get_events(sport):
     global QUOTA_USED 
     params = {'apiKey': API_KEY}
     url = f'https://api.the-odds-api.com/v4/sports/{sport}/events'
-    response = requests.get(url, params=params)
-    QUOTA_USED += int(response.headers._store.get('x-requests-last')[1])
-    eastern = pytz.timezone('America/New_York')
-    now_eastern = datetime.now(eastern)
-    today_date = now_eastern.date()
     try:
+        response = requests.get(url, params=params)
+        quota = int(response.headers.get('x-requests-last', 0))
+        QUOTA_USED += quota
+
+        eastern = pytz.timezone('America/New_York')
+        now_eastern = datetime.now(eastern)
+        today_date = now_eastern.date()
         response.raise_for_status()
         events = response.json()
         filtered_events = []
         for game in events:
             game['commence_time_edt'] = convert_utc_to_et(game['commence_time'])[:-4]
+            if not game['commence_time_edt']:
+                continue  # Skip if conversion failed
             game_time_edt = datetime.strptime(game['commence_time_edt'], '%Y-%m-%d %H:%M:%S')
             game_time_eastern = eastern.localize(game_time_edt)
             if (game_time_eastern.date() == today_date and game_time_eastern > now_eastern) or game_time_eastern.date() != today_date:
                 filtered_events.append(game)
+        logger.info(f"Fetched and filtered {len(filtered_events)} events for sport: {sport}")
         return filtered_events
     except requests.exceptions.HTTPError as http_err:
-        print(f"HTTP error occurred while fetching events: {http_err}")
+        logger.error(f"HTTP error occurred while fetching events: {http_err}")
         return []
     except Exception as err:
-        print(f"Other error occurred while fetching events: {err}")
+        logger.error(f"Other error occurred while fetching events: {err}")
         return []
 
 def get_todays_events(events):
@@ -144,8 +173,9 @@ def get_todays_events(events):
             if game_time_eastern.date() == today_date and game_time_eastern > now_eastern:
                 today_events.append(game)
         except Exception as e:
-            print(f"Error parsing game time: {e}")
+            logger.error(f"Error parsing game time: {e}")
             continue
+    logger.info(f"Filtered down to {len(today_events)} today's events.")
     return today_events
 
 def american_to_implied(odds):
@@ -222,133 +252,137 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
     pinnacle_data = next((b for b in bookmakers if b['key'] == 'pinnacle'), None)
 
     if not pinnacle_data:
+        logger.warning("Pinnacle data not found for event.")
         return None 
 
-    conn = sqlite3.connect(DATABASE_NAME)
-    c = conn.cursor()
+    try:
+        conn = sqlite3.connect(DATABASE_NAME)
+        c = conn.cursor()
 
-    for bookmaker in bookmakers:
-        if bookmaker['key'] == 'pinnacle':
-            continue  # Skip Pinnacle
+        for bookmaker in bookmakers:
+            if bookmaker['key'] == 'pinnacle':
+                continue  # Skip Pinnacle
 
-        for market in bookmaker.get('markets', []):
-            pinnacle_market = next((m for m in pinnacle_data.get('markets', []) if m['key'] == market['key']), None)
-            if not pinnacle_market:
-                continue  # Pinnacle lines don't exist
+            for market in bookmaker.get('markets', []):
+                pinnacle_market = next((m for m in pinnacle_data.get('markets', []) if m['key'] == market['key']), None)
+                if not pinnacle_market:
+                    continue  # Pinnacle lines don't exist
 
-            bet_type = transform_string(market['key'])  
+                bet_type = transform_string(market['key'])  
 
-            for outcome in market.get('outcomes', []):
-                pin_outcome = next((o for o in pinnacle_market.get('outcomes', [])
-                                    if o['description'] == outcome.get('description') and o['name'] == outcome.get('name')), None)
-                if not pin_outcome:
-                    continue  
+                for outcome in market.get('outcomes', []):
+                    pin_outcome = next((o for o in pinnacle_market.get('outcomes', [])
+                                        if o['description'] == outcome.get('description') and o['name'] == outcome.get('name')), None)
+                    if not pin_outcome:
+                        continue  
 
-                try:
-                    pin_prob = american_to_implied(pin_outcome['price'])
-                    other_prob = american_to_implied(outcome['price'])
-                except ValueError as ve:
-                    print(f"Error calculating implied probability: {ve}")
-                    continue
+                    try:
+                        pin_prob = american_to_implied(pin_outcome['price'])
+                        other_prob = american_to_implied(outcome['price'])
+                    except ValueError as ve:
+                        logger.error(f"Error calculating implied probability: {ve}")
+                        continue
 
-                prob_delta = pin_prob - other_prob  # Now a decimal
+                    prob_delta = pin_prob - other_prob  # Now a decimal
 
-                point_delta = calculate_point_delta(outcome, pin_outcome)
+                    point_delta = calculate_point_delta(outcome, pin_outcome)
 
-                # Initialize is_favorable as None
-                is_favorable = None
+                    # Initialize is_favorable as None
+                    is_favorable = None
 
-                # Determine is_favorable based on conditions
-                outcome_type = outcome.get('name')
-                player_name = outcome.get('description')
-                market_type = market.get('key')
-                current_point = outcome.get('point', None)
-                current_odds = outcome.get('price', None)
+                    # Determine is_favorable based on conditions
+                    outcome_type = outcome.get('name')
+                    player_name = outcome.get('description')
+                    market_type = market.get('key')
+                    current_point = outcome.get('point', None)
+                    current_odds = outcome.get('price', None)
 
-                pin_current_point = pin_outcome.get('point', None)
-                pin_current_odds = pin_outcome.get('price', None)
+                    pin_current_point = pin_outcome.get('point', None)
+                    pin_current_odds = pin_outcome.get('price', None)
 
 
-                if outcome_type in ['Over', 'Under', 'Yes']:
-                    # Fetch earliest matching entry from the database
-                    c.execute('''
-                        SELECT point_value, odds FROM player_props 
-                        WHERE market_type=? AND outcome_type=? AND player_name=?
-                        ORDER BY updated_dttm ASC LIMIT 1
-                    ''', (market_type, outcome_type, player_name))
-                    earliest = c.fetchone()
+                    if outcome_type in ['Over', 'Under', 'Yes']:
+                        # Fetch earliest matching entry from the database
+                        c.execute('''
+                            SELECT point_value, odds FROM player_props 
+                            WHERE market_type=? AND outcome_type=? AND player_name=?
+                            ORDER BY updated_dttm ASC LIMIT 1
+                        ''', (market_type, outcome_type, player_name))
+                        earliest = c.fetchone()
 
-                    if earliest:
-                        earliest_point, earliest_odds = earliest
+                        if earliest:
+                            earliest_point, earliest_odds = earliest
 
-                        if outcome_type == 'Over':
-                            if pin_current_point is not None and earliest_point is not None:
-                                if pin_current_point > earliest_point:
-                                    is_favorable = 'Y'
-                                elif pin_current_point == earliest_point and pin_current_odds < earliest_odds:
-                                    is_favorable = 'Y'
-                                else:
-                                    is_favorable = 'N'
-                        elif outcome_type == 'Under':
-                            if pin_current_point is not None and earliest_point is not None:
-                                if pin_current_point < earliest_point:
-                                    is_favorable = 'Y'
-                                elif pin_current_point == earliest_point and pin_current_odds < earliest_odds:
-                                    is_favorable = 'Y'
-                                else:
-                                    is_favorable = 'N'
-                        elif outcome_type == 'Yes':
-                            if pin_current_odds is not None and earliest_odds is not None:
-                                if pin_current_odds < earliest_odds:
-                                    is_favorable = 'Y'
-                                else:
-                                    is_favorable = 'N'
+                            if outcome_type == 'Over':
+                                if pin_current_point is not None and earliest_point is not None:
+                                    if pin_current_point > earliest_point:
+                                        is_favorable = 'Y'
+                                    elif pin_current_point == earliest_point and pin_current_odds < earliest_odds:
+                                        is_favorable = 'Y'
+                                    else:
+                                        is_favorable = 'N'
+                            elif outcome_type == 'Under':
+                                if pin_current_point is not None and earliest_point is not None:
+                                    if pin_current_point < earliest_point:
+                                        is_favorable = 'Y'
+                                    elif pin_current_point == earliest_point and pin_current_odds < earliest_odds:
+                                        is_favorable = 'Y'
+                                    else:
+                                        is_favorable = 'N'
+                            elif outcome_type == 'Yes':
+                                if pin_current_odds is not None and earliest_odds is not None:
+                                    if pin_current_odds < earliest_odds:
+                                        is_favorable = 'Y'
+                                    else:
+                                        is_favorable = 'N'
+                        else:
+                            is_favorable = None  # No earlier entry to compare
                     else:
-                        is_favorable = None  # No earlier entry to compare
-                else:
-                    is_favorable = None  # Ignore 'No' scenario
+                        is_favorable = None  # Ignore 'No' scenario
 
-                # Prepare result entry
-                result_entry = {
-                    "commence_time": commence_time,
-                    "event_name": event_name,
-                    "source": bookmaker.get('title'),
-                    "player": outcome.get('description'),
-                    "type": outcome.get('name'),
-                    "bet_type": bet_type,
-                    "odds": outcome.get('price'),
-                    "delta": prob_delta,  # Now a decimal
-                    "is_favorable": is_favorable
-                }
+                    # Prepare result entry
+                    result_entry = {
+                        "commence_time": commence_time,
+                        "event_name": event_name,
+                        "source": bookmaker.get('title'),
+                        "player": outcome.get('description'),
+                        "type": outcome.get('name'),
+                        "bet_type": bet_type,
+                        "odds": outcome.get('price'),
+                        "delta": prob_delta,  # Now a decimal
+                        "is_favorable": is_favorable
+                    }
 
-                if 'point' in outcome and outcome['point'] is not None:
-                    result_entry['point'] = outcome['point']
-                    result_entry['pinnacle'] = f"{pin_outcome['description']} {pin_outcome['name']} {pin_outcome.get('point', '')} @ {pin_outcome['price']}"
-                else:
-                    result_entry['pinnacle'] = f"{pin_outcome['description']} {pin_outcome['name']} @ {pin_outcome['price']}"
+                    if 'point' in outcome and outcome['point'] is not None:
+                        result_entry['point'] = outcome['point']
+                        result_entry['pinnacle'] = f"{pin_outcome['description']} {pin_outcome['name']} {pin_outcome.get('point', '')} @ {pin_outcome['price']}"
+                    else:
+                        result_entry['pinnacle'] = f"{pin_outcome['description']} {pin_outcome['name']} @ {pin_outcome['price']}"
 
-                if point_delta is not None:
-                    result_entry["point_delta"] = point_delta
-                else:
-                    result_entry["point_delta"] = 0  # Default value when point_delta is not applicable
+                    if point_delta is not None:
+                        result_entry["point_delta"] = point_delta
+                    else:
+                        result_entry["point_delta"] = 0  # Default value when point_delta is not applicable
 
-                # Determine if the line is more favorable for inclusion in results
-                if outcome_type not in ['No', 'Yes', 'Under', 'Over']:
-                    continue  # Skip irrelevant types
+                    # Determine if the line is more favorable for inclusion in results
+                    if outcome_type not in ['No', 'Yes', 'Under', 'Over']:
+                        continue  # Skip irrelevant types
 
-                # Categorize results based on existing logic
-                if not ('point' in outcome and outcome['point'] is not None):
-                    if outcome_type != 'No' and prob_delta >= ATD_DELTA and pin_outcome['price'] <= 300:
-                        results_with_same_points.append(result_entry)
-                else:
-                    if ((outcome_type == "Over" and current_point < pin_outcome.get('point', 0)) or
-                        (outcome_type == "Under" and current_point > pin_outcome.get('point', 0))) and \
-                        pin_prob >= 0.5 and (point_delta >= 1 or prob_delta >= 2):
-                        results_with_different_points.append(result_entry)
-                    elif current_point == pin_outcome.get('point', 0) and prob_delta > 3:
-                        results_with_same_points.append(result_entry)
-
-    conn.close()
+                    # Categorize results based on existing logic
+                    if not ('point' in outcome and outcome['point'] is not None):
+                        if outcome_type != 'No' and prob_delta >= ATD_DELTA and pin_outcome['price'] <= 300:
+                            results_with_same_points.append(result_entry)
+                    else:
+                        if ((outcome_type == "Over" and current_point < pin_outcome.get('point', 0)) or
+                            (outcome_type == "Under" and current_point > pin_outcome.get('point', 0))) and \
+                            pin_prob >= 0.5 and (point_delta >= 1 or prob_delta >= 2):
+                            results_with_different_points.append(result_entry)
+                        elif current_point == pin_outcome.get('point', 0) and prob_delta > 3:
+                            results_with_same_points.append(result_entry)
+    except Exception as e:
+        logger.error(f"Error finding favorable lines: {e}")
+    finally:
+        conn.close()
 
     # Sort results by Point Delta descending, then by Odds Percentage Delta descending
     results_with_different_points.sort(key=lambda x: (x.get('point_delta', 0), x['delta']), reverse=True)
@@ -487,10 +521,12 @@ def output_to_html(diff_pts: list, same_pts: list):
     """
 
     # Write HTML to a file
-    with open(HTML_OUTPUT, "w") as file:
-        file.write(html_content)
-
-    print(f"HTML file with combined bets has been saved as '{HTML_OUTPUT}'")
+    try:
+        with open(HTML_OUTPUT, "w") as file:
+            file.write(html_content)
+        logger.info(f"HTML file with combined bets has been saved as '{HTML_OUTPUT}'")
+    except Exception as e:
+        logger.error(f"Error writing HTML file: {e}")
 
     # Proceed to save data to Excel
     save_to_excel(diff_pts, same_pts)
@@ -504,99 +540,93 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
         same_pts (list): List of results with same points.
         filename (str): The name of the Excel file to create.
     """
-    # Convert lists to DataFrames
-    df_diff = pd.DataFrame(diff_pts)
-    df_same = pd.DataFrame(same_pts)
+    try:
+        # Convert lists to DataFrames
+        df_diff = pd.DataFrame(diff_pts)
+        df_same = pd.DataFrame(same_pts)
 
-    # Define column renaming
-    col_names = {
-        'commence_time': 'Start Time', 
-        'event_name': 'Event',
-        'source': 'Book',
-        'player': 'Player',
-        'type': 'Outcome',
-        'bet_type': 'Prop',
-        'point': 'Point',
-        'odds': 'Odds',
-        'pinnacle': 'Pinnacle Odds',
-        'delta': 'Odds % Delta',
-        'point_delta': 'Point Delta',
-        'is_favorable': 'Is Favorable'
-    }
+        # Define column renaming
+        col_names = {
+            'commence_time': 'Start Time', 
+            'event_name': 'Event',
+            'source': 'Book',
+            'player': 'Player',
+            'type': 'Outcome',
+            'bet_type': 'Prop',
+            'point': 'Point',
+            'odds': 'Odds',
+            'pinnacle': 'Pinnacle Odds',
+            'delta': 'Odds % Delta',
+            'point_delta': 'Point Delta',
+            'is_favorable': 'Is Favorable'
+        }
 
-    # Rename columns
-    df_diff = df_diff.rename(columns=col_names)
-    df_same = df_same.rename(columns=col_names)
+        # Rename columns
+        df_diff = df_diff.rename(columns=col_names)
+        df_same = df_same.rename(columns=col_names)
 
-    # Define desired column order
-    desired_order = [
-        'Start Time',
-        'Event',
-        'Book',
-        'Player',
-        'Outcome',
-        'Prop',
-        'Point',
-        'Odds',
-        'Pinnacle Odds',
-        'Point Delta',
-        'Odds % Delta',
-        'Is Favorable'
-    ]
+        # Define desired column order
+        desired_order = [
+            'Start Time',
+            'Event',
+            'Book',
+            'Player',
+            'Outcome',
+            'Prop',
+            'Point',
+            'Odds',
+            'Pinnacle Odds',
+            'Point Delta',
+            'Odds % Delta',
+            'Is Favorable'
+        ]
 
-    # Reorder columns if they exist, else add them with default values
-    for df in [df_diff, df_same]:
-        for col in desired_order:
-            if col not in df.columns:
-                df[col] = 0  # Set default value as 0 or pd.NA
+        # Reorder columns if they exist, else add them with default values
+        for df in [df_diff, df_same]:
+            for col in desired_order:
+                if col not in df.columns:
+                    df[col] = 0  # Set default value as 0 or pd.NA
 
-    # Sort DataFrames: first by 'Point Delta' descending, then by 'Odds Percentage Delta' descending
-    df_diff_sorted = df_diff.sort_values(by=['Point Delta', 'Odds % Delta'], ascending=[False, False])
-    df_same_sorted = df_same.sort_values(by=['Point Delta', 'Odds % Delta'], ascending=[False, False])
+        # Sort DataFrames: first by 'Point Delta' descending, then by 'Odds Percentage Delta' descending
+        df_diff_sorted = df_diff.sort_values(by=['Point Delta', 'Odds % Delta'], ascending=[False, False])
+        df_same_sorted = df_same.sort_values(by=['Point Delta', 'Odds % Delta'], ascending=[False, False])
 
-    # Reorder columns
-    df_diff_sorted = df_diff_sorted[desired_order]
-    df_same_sorted = df_same_sorted[desired_order]
+        # Reorder columns
+        df_diff_sorted = df_diff_sorted[desired_order]
+        df_same_sorted = df_same_sorted[desired_order]
 
-    # No need to ensure 'Point Delta' exists again, as it was already added with default value if missing
+        # Create a Pandas Excel writer using openpyxl as the engine
+        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            # Write Diff Points sheet
+            df_diff_sorted.to_excel(writer, sheet_name='Diff Points', index=False)
+            # Write Same Points sheet
+            df_same_sorted.to_excel(writer, sheet_name='Same Points', index=False)
 
-    # Create a Pandas Excel writer using openpyxl as the engine
-    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
-        # Write Diff Points sheet
-        df_diff_sorted.to_excel(writer, sheet_name='Diff Points', index=False)
-        # Write Same Points sheet
-        df_same_sorted.to_excel(writer, sheet_name='Same Points', index=False)
+            # Access the workbook and sheets
+            workbook = writer.book
+            for sheet_name in ['Diff Points', 'Same Points']:
+                worksheet = writer.sheets[sheet_name]
+                
+                # Apply filters
+                worksheet.auto_filter.ref = worksheet.dimensions
 
-        # Access the workbook and sheets
-        workbook = writer.book
-        for sheet_name in ['Diff Points', 'Same Points']:
-            worksheet = writer.sheets[sheet_name]
-            
-            # Apply filters
-            worksheet.auto_filter.ref = worksheet.dimensions
+                # Apply formatting
+                for column_cells in worksheet.columns:
+                    # Determine the maximum length in the column for setting column width
+                    length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
+                    column_letter = column_cells[0].column_letter
+                    worksheet.column_dimensions[column_letter].width = length + 2  # Adding extra space
 
-            # Rename columns in Excel (ensuring headers are correct)
-            for idx, column in enumerate(df_diff_sorted.columns, 1):
-                header = column  # Already renamed
-                worksheet.cell(row=1, column=idx, value=header)
+                    # Apply percentage format to 'Odds Percentage Delta'
+                    header_cell = worksheet[f"{column_letter}1"].value
+                    if header_cell == 'Odds % Delta':
+                        for cell in column_cells[1:]:  # Skip header
+                            if isinstance(cell.value, (int, float)):
+                                cell.number_format = '0.00%'
 
-            # Apply formatting
-            for column_cells in worksheet.columns:
-                # Determine the maximum length in the column for setting column width
-                length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
-                column_letter = column_cells[0].column_letter
-                worksheet.column_dimensions[column_letter].width = length + 2  # Adding extra space
-
-                # Apply percentage format to 'Odds Percentage Delta'
-                header_cell = worksheet[f"{column_letter}1"].value
-                if header_cell == 'Odds % Delta':
-                    for cell in column_cells[1:]:  # Skip header
-                        if isinstance(cell.value, (int, float)):
-                            cell.number_format = '0.00%'
-
-    # No need to call writer.save() here as it's handled by the context manager
-
-    print(f"Excel file '{filename}' has been created with filters, sorting, and adjusted column widths.")
+        logger.info(f"Excel file '{filename}' has been created with filters, sorting, and adjusted column widths.")
+    except Exception as e:
+        logger.error(f"Error saving Excel file: {e}")
 
 def store_props(props):
     """
@@ -605,57 +635,61 @@ def store_props(props):
     Parameters:
         props (dict): Props data fetched from the API.
     """
-    conn = sqlite3.connect(DATABASE_NAME)
-    c = conn.cursor()
+    try:
+        conn = sqlite3.connect(DATABASE_NAME)
+        c = conn.cursor()
 
-    bookmakers = props.get('bookmakers', [])
-    event_commence_time = convert_utc_to_et(props.get('commence_time', ''))
-    event_name = f"{props.get('away_team', '')} @ {props.get('home_team', '')}"
-    sport_key = props.get('sport_key', '')
-    event_id = props.get('id', '')
+        bookmakers = props.get('bookmakers', [])
+        event_commence_time = convert_utc_to_et(props.get('commence_time', ''))
+        event_name = f"{props.get('away_team', '')} @ {props.get('home_team', '')}"
+        sport_key = props.get('sport_key', '')
+        event_id = props.get('id', '')
 
-    table_name = 'player_props'
+        table_name = 'player_props'
 
-    # Create table if it doesn't exist
-    c.execute(f'''
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            event_id TEXT,
-            event_name TEXT,
-            sport_key TEXT,
-            market_type TEXT,
-            outcome_type TEXT,
-            player_name TEXT,
-            point_value REAL,
-            odds REAL,
-            event_commence_time TEXT,
-            updated_dttm TEXT,
-            PRIMARY KEY (event_id, market_type, outcome_type, player_name)
-        )
-    ''')
+        # Create table if it doesn't exist
+        c.execute(f'''
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                event_id TEXT,
+                event_name TEXT,
+                sport_key TEXT,
+                market_type TEXT,
+                outcome_type TEXT,
+                player_name TEXT,
+                point_value REAL,
+                odds REAL,
+                event_commence_time TEXT,
+                updated_dttm TEXT,
+                PRIMARY KEY (event_id, market_type, outcome_type, player_name)
+            )
+        ''')
 
-    for bookmaker in bookmakers:
-        if bookmaker['key'] != SELECTED_BOOK:
-            continue  # Only store props for the selected bookmaker
+        for bookmaker in bookmakers:
+            if bookmaker['key'] != SELECTED_BOOK:
+                continue  # Only store props for the selected bookmaker
 
-        markets = bookmaker.get('markets', [])
-        for m in markets:
-            market_type = m.get('key', '')
-            updated_dttm = convert_utc_to_et(m.get('last_update', ''))
-            outcomes = m.get('outcomes', [])
-            for o in outcomes:
-                player_name = o.get('description', '')
-                outcome_type = o.get('name', '')
-                odds = o.get('price', None)
-                point_value = o.get('point', None)
-                c.execute(f'''
-                    INSERT OR REPLACE INTO {table_name} 
-                    (event_id, event_name, sport_key, market_type, outcome_type, player_name, point_value, odds, event_commence_time, updated_dttm)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', 
-                (event_id, event_name, sport_key, market_type, outcome_type, player_name, point_value, odds, event_commence_time, updated_dttm))
-    
-    conn.commit()
-    conn.close()
+            markets = bookmaker.get('markets', [])
+            for m in markets:
+                market_type = m.get('key', '')
+                updated_dttm = convert_utc_to_et(m.get('last_update', ''))
+                outcomes = m.get('outcomes', [])
+                for o in outcomes:
+                    player_name = o.get('description', '')
+                    outcome_type = o.get('name', '')
+                    odds = o.get('price', None)
+                    point_value = o.get('point', None)
+                    c.execute(f'''
+                        INSERT OR REPLACE INTO {table_name} 
+                        (event_id, event_name, sport_key, market_type, outcome_type, player_name, point_value, odds, event_commence_time, updated_dttm)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', 
+                    (event_id, event_name, sport_key, market_type, outcome_type, player_name, point_value, odds, event_commence_time, updated_dttm))
+        
+        conn.commit()
+        conn.close()
+        logger.info(f"Stored props for event ID: {event_id}")
+    except Exception as e:
+        logger.error(f"Error storing props to database: {e}")
 
 def main():
     """
@@ -663,9 +697,15 @@ def main():
     """
     # Ensure API_KEY is set
     if not API_KEY:
+        logger.error("API key for The Odds API not found. Please set 'THE_ODDS_API_KEY' environment variable.")
         raise EnvironmentError("API key for The Odds API not found. Please set 'THE_ODDS_API_KEY' environment variable.")
+
     global QUOTA_USED
     sport = SPORTS[0]
+
+    logger.info("Processing started.")
+    start_time = datetime.now()
+
     events = get_events(sport)
     diff_pts = [] 
     same_pts = []
@@ -685,8 +725,12 @@ def main():
                 same_pts.extend(results[1])
 
     output_to_html(diff_pts, same_pts)
-    print(f"Quota Used: {QUOTA_USED}")
-    QUOTA_USED = 0 
+
+    end_time = datetime.now()
+    elapsed_time = end_time - start_time
+    logger.info(f"Processing completed in {elapsed_time}.")
+    logger.info(f"Quota Used: {QUOTA_USED}")
+    QUOTA_USED = 0
 
 if __name__ == "__main__":
     main()
