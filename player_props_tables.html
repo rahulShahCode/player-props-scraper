@@ -1,0 +1,383 @@
+
+    
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            if ($('.diff-pts-table thead tr th').length) {
+                $('.diff-pts-table').DataTable();
+            }
+            
+            if ($('.same-pts-table thead tr th').length) {
+                $('.same-pts-table').DataTable();
+            }
+        });
+    </script>
+    <style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background-color: #f9f9f9;
+    }
+    h2 {
+        color: #4A90E2;
+        font-family: 'Trebuchet MS', sans-serif;
+        text-align: center;
+        font-size: 1.5em;
+        margin-top: 20px;
+    }
+    .container {
+        width: 90%;
+        margin: auto;
+        padding: 20px;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .table {
+        margin: 20px 0;
+        width: 100%;
+    }
+    </style>
+    
+    <div class='container'>
+        <h2>Diff Points</h2>
+        <table border="1" class="dataframe table table-striped table-bordered diff-pts-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Start Time</th>
+      <th>Event</th>
+      <th>Book</th>
+      <th>Player</th>
+      <th>Outcome</th>
+      <th>Prop</th>
+      <th>Point</th>
+      <th>Odds</th>
+      <th>Pinnacle Odds</th>
+      <th>Point Delta</th>
+      <th>Odds % Delta</th>
+      <th>Is Favorable</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>FanDuel</td>
+      <td>Bijan Robinson</td>
+      <td>Under</td>
+      <td>Rush Yds</td>
+      <td>71.5</td>
+      <td>-114</td>
+      <td>Bijan Robinson Under 66.5 @ -112</td>
+      <td>5.0</td>
+      <td>-0.0%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>DraftKings</td>
+      <td>Bijan Robinson</td>
+      <td>Under</td>
+      <td>Rush Yds</td>
+      <td>68.5</td>
+      <td>-115</td>
+      <td>Bijan Robinson Under 66.5 @ -112</td>
+      <td>2.0</td>
+      <td>-0.01%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>FanDuel</td>
+      <td>Rachaad White</td>
+      <td>Over</td>
+      <td>Rush Yds</td>
+      <td>32.5</td>
+      <td>-114</td>
+      <td>Rachaad White Over 33.5 @ -113</td>
+      <td>1.0</td>
+      <td>-0.0%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>FanDuel</td>
+      <td>Cade Otton</td>
+      <td>Over</td>
+      <td>Reception Yds</td>
+      <td>27.5</td>
+      <td>-114</td>
+      <td>Cade Otton Over 28.5 @ -112</td>
+      <td>1.0</td>
+      <td>-0.0%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>FanDuel</td>
+      <td>Chris Godwin</td>
+      <td>Over</td>
+      <td>Reception Yds</td>
+      <td>65.5</td>
+      <td>-114</td>
+      <td>Chris Godwin Over 66.5 @ -110</td>
+      <td>1.0</td>
+      <td>-0.01%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>FanDuel</td>
+      <td>Baker Mayfield</td>
+      <td>Under</td>
+      <td>Pass Yds</td>
+      <td>240.5</td>
+      <td>-114</td>
+      <td>Baker Mayfield Under 239.5 @ -109</td>
+      <td>1.0</td>
+      <td>-0.01%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>DraftKings</td>
+      <td>Baker Mayfield</td>
+      <td>Under</td>
+      <td>Pass Yds</td>
+      <td>240.5</td>
+      <td>-115</td>
+      <td>Baker Mayfield Under 239.5 @ -109</td>
+      <td>1.0</td>
+      <td>-0.01%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>Caesars</td>
+      <td>Baker Mayfield</td>
+      <td>Under</td>
+      <td>Pass Yds</td>
+      <td>240.5</td>
+      <td>-115</td>
+      <td>Baker Mayfield Under 239.5 @ -109</td>
+      <td>1.0</td>
+      <td>-0.01%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>BetMGM</td>
+      <td>Baker Mayfield</td>
+      <td>Under</td>
+      <td>Pass Yds</td>
+      <td>240.5</td>
+      <td>-115</td>
+      <td>Baker Mayfield Under 239.5 @ -109</td>
+      <td>1.0</td>
+      <td>-0.01%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>BetMGM</td>
+      <td>Kirk Cousins</td>
+      <td>Under</td>
+      <td>Pass Yds</td>
+      <td>227.5</td>
+      <td>-115</td>
+      <td>Kirk Cousins Under 226.5 @ -109</td>
+      <td>1.0</td>
+      <td>-0.01%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>DraftKings</td>
+      <td>Kyle Pitts</td>
+      <td>Over</td>
+      <td>Reception Yds</td>
+      <td>30.5</td>
+      <td>-115</td>
+      <td>Kyle Pitts Over 31.5 @ -108</td>
+      <td>1.0</td>
+      <td>-0.02%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>Caesars</td>
+      <td>Kyle Pitts</td>
+      <td>Over</td>
+      <td>Reception Yds</td>
+      <td>30.5</td>
+      <td>-115</td>
+      <td>Kyle Pitts Over 31.5 @ -108</td>
+      <td>1.0</td>
+      <td>-0.02%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>BetMGM</td>
+      <td>Kyle Pitts</td>
+      <td>Over</td>
+      <td>Reception Yds</td>
+      <td>30.5</td>
+      <td>-115</td>
+      <td>Kyle Pitts Over 31.5 @ -108</td>
+      <td>1.0</td>
+      <td>-0.02%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>Caesars</td>
+      <td>Kirk Cousins</td>
+      <td>Under</td>
+      <td>Pass Yds</td>
+      <td>227.5</td>
+      <td>-117</td>
+      <td>Kirk Cousins Under 226.5 @ -109</td>
+      <td>1.0</td>
+      <td>-0.02%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>FanDuel</td>
+      <td>Bucky Irving</td>
+      <td>Under</td>
+      <td>Rush Yds</td>
+      <td>40.5</td>
+      <td>-114</td>
+      <td>Bucky Irving Under 39.5 @ 100</td>
+      <td>1.0</td>
+      <td>-0.03%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>Caesars</td>
+      <td>Bucky Irving</td>
+      <td>Under</td>
+      <td>Rush Yds</td>
+      <td>40.5</td>
+      <td>-119</td>
+      <td>Bucky Irving Under 39.5 @ 100</td>
+      <td>1.0</td>
+      <td>-0.04%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>DraftKings</td>
+      <td>Bucky Irving</td>
+      <td>Under</td>
+      <td>Rush Yds</td>
+      <td>40.5</td>
+      <td>-120</td>
+      <td>Bucky Irving Under 39.5 @ 100</td>
+      <td>1.0</td>
+      <td>-0.05%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>BetMGM</td>
+      <td>Bucky Irving</td>
+      <td>Under</td>
+      <td>Rush Yds</td>
+      <td>40.5</td>
+      <td>-120</td>
+      <td>Bucky Irving Under 39.5 @ 100</td>
+      <td>1.0</td>
+      <td>-0.05%</td>
+      <td>N</td>
+    </tr>
+  </tbody>
+</table>
+        <h2>Same Points</h2>
+        <table border="1" class="dataframe table table-striped table-bordered same-pts-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Start Time</th>
+      <th>Event</th>
+      <th>Book</th>
+      <th>Player</th>
+      <th>Outcome</th>
+      <th>Prop</th>
+      <th>Point</th>
+      <th>Odds</th>
+      <th>Pinnacle Odds</th>
+      <th>Point Delta</th>
+      <th>Odds % Delta</th>
+      <th>Is Favorable</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>DraftKings</td>
+      <td>Ray-Ray McCloud III</td>
+      <td>Yes</td>
+      <td>Anytime Td</td>
+      <td>0</td>
+      <td>320</td>
+      <td>Ray-Ray McCloud III Yes @ 258</td>
+      <td>0</td>
+      <td>0.04%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>FanDuel</td>
+      <td>Ray-Ray McCloud III</td>
+      <td>Yes</td>
+      <td>Anytime Td</td>
+      <td>0</td>
+      <td>300</td>
+      <td>Ray-Ray McCloud III Yes @ 258</td>
+      <td>0</td>
+      <td>0.03%</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td>2024-10-03 20:15:00</td>
+      <td>Tampa Bay Buccaneers @ Atlanta Falcons</td>
+      <td>DraftKings</td>
+      <td>Tyler Allgeier</td>
+      <td>Yes</td>
+      <td>Anytime Td</td>
+      <td>0</td>
+      <td>300</td>
+      <td>Tyler Allgeier Yes @ 265</td>
+      <td>0</td>
+      <td>0.02%</td>
+      <td>N</td>
+    </tr>
+  </tbody>
+</table>
+    </div>
+    
