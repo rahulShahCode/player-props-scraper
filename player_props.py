@@ -34,7 +34,7 @@ MARKETS = [
     'player_kicking_points'
 ]
 DATABASE_NAME = 'odds.db'
-HTML_OUTPUT = "player_props_tables.html"
+HTML_OUTPUT = "index.html"
 EXCEL_OUTPUT = "player_props.xlsx"
 
 def remove_commenced_games():
