@@ -1,2 +1,7 @@
 # Ignore log files
 scraper.log
+
+*.xlsx
+*.csv
+
+!player_props.xlsx
