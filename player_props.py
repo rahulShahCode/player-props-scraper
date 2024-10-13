@@ -194,6 +194,33 @@ def american_to_implied(odds):
         return 100 / (odds + 100)
     else:
         return abs(odds) / (abs(odds) + 100)
+    
+def get_projected_value(over_odds, under_odds, point_value):
+    over_prob = american_to_implied(over_odds)
+    under_prob = american_to_implied(under_odds)
+    total_prob = over_prob + under_prob
+    normalized_over_prob = over_prob / total_prob
+    normalized_under_prob = under_prob / total_prob
+    return (normalized_over_prob * (point_value + 0.5)) + (normalized_under_prob * (point_value - 0.5))
+
+def add_projected_values(outcomes):
+    result = []
+    # Group by description and check for Over/Under
+    descriptions = set([outcome['description'] for outcome in outcomes])
+    for desc in descriptions:
+        over = next((o for o in outcomes if o['description'] == desc and o['name'].lower() == 'over'), None)
+        under = next((u for u in outcomes if u['description'] == desc and u['name'].lower() == 'under'), None)
+        
+        if over and under:
+            projected_value = get_projected_value(over['price'], under['price'], over['point'])
+            over['projected_value'] = projected_value
+            under['projected_value'] = projected_value
+            result.append(over)
+            result.append(under)
+    if len(result) == 0:
+        result = outcomes
+    return result
+
 
 def transform_string(input_str):
     """
@@ -269,13 +296,15 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
                     continue  # Pinnacle lines don't exist
 
                 bet_type = transform_string(market['key'])  
-
-                for outcome in market.get('outcomes', []):
-                    pin_outcome = next((o for o in pinnacle_market.get('outcomes', [])
+                outcomes = market.get('outcomes',[])
+                outcomes = add_projected_values(outcomes)
+                pinnacle_outcomes = add_projected_values(pinnacle_market.get('outcomes', []))
+                for outcome in outcomes:
+                    pin_outcome = next((o for o in pinnacle_outcomes
                                         if o['description'] == outcome.get('description') and o['name'] == outcome.get('name')), None)
                     if not pin_outcome:
                         continue  
-
+                     # over_under_exists = any(d['name'] == 'Over' for d in outcome) and any(d['name'] == 'Under' for d in outcome)
                     try:
                         pin_prob = american_to_implied(pin_outcome['price'])
                         other_prob = american_to_implied(outcome['price'])
@@ -296,10 +325,16 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
                     market_type = market.get('key')
                     current_point = outcome.get('point', None)
                     current_odds = outcome.get('price', None)
-
+                    projected_value = outcome.get('projected_value', None)
+                    pin_projected_value = pin_outcome.get('projected_value', None)
+                    projected_val_delta = None 
                     pin_current_point = pin_outcome.get('point', None)
                     pin_current_odds = pin_outcome.get('price', None)
+                    point_move = None 
+                    odds_pct_move = None 
 
+                    if pin_projected_value is not None and projected_value is not None: 
+                        projected_val_delta = pin_projected_value - projected_value
 
                     if outcome_type in ['Over', 'Under', 'Yes']:
                         # Fetch earliest matching entry from the database
@@ -312,7 +347,9 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
 
                         if earliest:
                             earliest_point, earliest_odds = earliest
-
+                            if pin_current_point is not None and earliest_point is not None:
+                                point_move = pin_current_point - earliest_point
+                            odds_pct_move = american_to_implied(pin_current_odds) - american_to_implied(earliest_odds)
                             if outcome_type == 'Over':
                                 if pin_current_point is not None and earliest_point is not None:
                                     if pin_current_point > earliest_point:
@@ -350,7 +387,13 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
                         "bet_type": bet_type,
                         "odds": outcome.get('price'),
                         "delta": prob_delta,  # Now a decimal
-                        "is_favorable": is_favorable
+                        "is_favorable": is_favorable,
+                        "point_move" : point_move,
+                        "projected_value" : projected_value,
+                        "pinnacle_projected_val" : pin_projected_value,
+                        "projected_val_delta" : projected_val_delta,
+                        "point_move" : point_move,
+                        "odds_pct_move" : odds_pct_move
                     }
 
                     if 'point' in outcome and outcome['point'] is not None:
@@ -558,7 +601,12 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
             'pinnacle': 'Pinnacle Odds',
             'delta': 'Odds % Delta',
             'point_delta': 'Point Delta',
-            'is_favorable': 'Is Favorable'
+            'is_favorable': 'Is Favorable',
+            'projected_value' : 'Projected Value',
+            'pinnacle_projected_val' : 'Pinnacle Projected Value',
+            'projected_val_delta' : 'Projected Value Delta',
+            "point_move" : "Point Move",
+            "odds_pct_move" : "Odds % Move"
         }
 
         # Rename columns
@@ -578,7 +626,12 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
             'Pinnacle Odds',
             'Point Delta',
             'Odds % Delta',
-            'Is Favorable'
+            'Is Favorable',
+            'Projected Value',
+            'Pinnacle Projected Value',
+            'Projected Value Delta',
+            'Point Move',
+            'Odds % Move'
         ]
 
         # Reorder columns if they exist, else add them with default values
