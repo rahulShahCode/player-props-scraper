@@ -38,3 +38,24 @@ jobs:
           author_email: github-actions[bot]@users.noreply.github.com
           message: "Automated update of odds data [skip ci]"
           add: "."
+  merge-odds-db-to-dev:
+    needs: run-scraper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout dev branch
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: dev
+
+      - name: Fetch odds.db from main branch
+        run: |
+          git fetch origin main
+          git checkout origin/main -- odds.db
+
+      - name: Commit odds.db to dev branch
+        run: |
+          git add odds.db
+          git commit -m "Merging odds.db from main to dev"
+          git push origin dev
