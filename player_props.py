@@ -762,12 +762,12 @@ def main():
     events = get_events(sport)
     diff_pts = [] 
     same_pts = []
+    remove_commenced_games()
     for event in events: 
         props = fetch_props(event['id'], event['sport_key'])
         if not props:
             continue
         store_props(props)
-        remove_commenced_games()
         event_name = f"{event.get('away_team', '')} @ {event.get('home_team', '')}"
         commence_time = convert_utc_to_et(event.get('commence_time', ''))[:-4]
         results = find_favorable_lines(props, event_name, commence_time)  # Process the data
