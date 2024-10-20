@@ -56,6 +56,8 @@ jobs:
 
       - name: Commit odds.db to dev branch
         run: |
+          git config user.email "${{ secrets.GIT_USER_EMAIL }}"
+          git config user.name "${{ secrets.GIT_USER_NAME }}"
           git add odds.db
           git commit -m "Merging odds.db from main to dev"
           git push origin dev
