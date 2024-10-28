@@ -21,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Define Constants
-MY_BOOKMAKERS = ['fanduel', 'draftkings', 'espnbet', 'williamhill_us', 'betmgm', 'pinnacle']
+MY_BOOKMAKERS = ['fanduel', 'draftkings', 'espnbet', 'williamhill_us', 'betmgm', 'betriver', 'hardrockbet', 'pinnacle']
 SELECTED_BOOK = 'pinnacle'
 ATD_DELTA = 0.01
 API_KEY = os.getenv('THE_ODDS_API_KEY')  # Ensure this environment variable is set
@@ -376,7 +376,11 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
                             is_favorable = None  # No earlier entry to compare
                     else:
                         is_favorable = None  # Ignore 'No' scenario
-
+                    abs_point_move, abs_proj_delta = None, None
+                    if point_move is not None: 
+                        abs_point_move = abs(point_move)
+                    if projected_val_delta is not None:
+                        abs_proj_delta = abs(projected_val_delta)
                     # Prepare result entry
                     result_entry = {
                         "commence_time": commence_time,
@@ -393,7 +397,9 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
                         "pinnacle_projected_val" : pin_projected_value,
                         "projected_val_delta" : projected_val_delta,
                         "point_move" : point_move,
-                        "odds_pct_move" : odds_pct_move
+                        "odds_pct_move" : odds_pct_move,
+                        "abs_point_move" : abs_point_move,
+                        "abs_proj_delta" : abs_proj_delta
                     }
 
                     if 'point' in outcome and outcome['point'] is not None:
@@ -606,7 +612,9 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
             'pinnacle_projected_val' : 'Pinnacle Projected Value',
             'projected_val_delta' : 'Projected Value Delta',
             "point_move" : "Point Move",
-            "odds_pct_move" : "Odds % Move"
+            "odds_pct_move" : "Odds % Move",
+            "abs_point_move" : "Abs Point Move",
+            "abs_proj_delta" : "Abs Proj Delta" 
         }
 
         # Rename columns
@@ -631,7 +639,9 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
             'Pinnacle Projected Value',
             'Projected Value Delta',
             'Point Move',
-            'Odds % Move'
+            'Odds % Move',
+            "Abs Proj Delta",
+            "Abs Point Move"
         ]
 
         # Reorder columns if they exist, else add them with default values
