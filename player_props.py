@@ -21,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Define Constants
-MY_BOOKMAKERS = ['fanduel', 'draftkings', 'espnbet', 'williamhill_us', 'betmgm', 'betriver', 'hardrockbet', 'pinnacle']
+MY_BOOKMAKERS = ['fanduel', 'draftkings', 'espnbet', 'williamhill_us', 'betmgm', 'betrivers', 'hardrockbet', 'pinnacle']
 SELECTED_BOOK = 'pinnacle'
 ATD_DELTA = 0.01
 API_KEY = os.getenv('THE_ODDS_API_KEY')  # Ensure this environment variable is set
