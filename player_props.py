@@ -622,7 +622,7 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
         df_same = df_same.rename(columns=col_names)
 
         # Define desired column order
-        desired_order = [
+        diff_desired_order = [
             'Start Time',
             'Event',
             'Book',
@@ -635,28 +635,38 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
             'Point Delta',
             'Odds % Delta',
             'Is Favorable',
-            'Projected Value',
-            'Pinnacle Projected Value',
-            'Projected Value Delta',
-            'Point Move',
-            'Odds % Move',
             "Abs Proj Delta",
             "Abs Point Move"
         ]
-
+        same_desired_order = [
+            'Start Time',
+            'Event',
+            'Book',
+            'Player',
+            'Outcome',
+            'Prop',
+            'Point',
+            'Odds',
+            'Pinnacle Odds',
+            'Odds % Delta',
+            'Is Favorable',
+            'Odds % Move'
+        ]
         # Reorder columns if they exist, else add them with default values
-        for df in [df_diff, df_same]:
-            for col in desired_order:
-                if col not in df.columns:
-                    df[col] = 0  # Set default value as 0 or pd.NA
+        for col in diff_desired_order:
+            if col not in df_diff.columns:
+                df_diff[col] = 0  # Set default value as 0 or pd.NA
+        for col in same_desired_order:
+            if col not in df_same.columns:
+                df_same[col] = 0  # Set default value as 0 or pd.NA
 
         # Sort DataFrames: first by 'Point Delta' descending, then by 'Odds Percentage Delta' descending
-        df_diff_sorted = df_diff.sort_values(by=['Point Delta', 'Odds % Delta'], ascending=[False, False])
-        df_same_sorted = df_same.sort_values(by=['Point Delta', 'Odds % Delta'], ascending=[False, False])
+        df_diff_sorted = df_diff.sort_values(by=['Abs Point Move', 'Point Delta'], ascending=[False, False])
+        df_same_sorted = df_same.sort_values(by=['Odds % Move', 'Odds % Delta'], ascending=[False, False])
 
         # Reorder columns
-        df_diff_sorted = df_diff_sorted[desired_order]
-        df_same_sorted = df_same_sorted[desired_order]
+        df_diff_sorted = df_diff_sorted[diff_desired_order]
+        df_same_sorted = df_same_sorted[same_desired_order]
 
         # Create a Pandas Excel writer using openpyxl as the engine
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
@@ -666,7 +676,6 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
             df_same_sorted.to_excel(writer, sheet_name='Same Points', index=False)
 
             # Access the workbook and sheets
-            workbook = writer.book
             for sheet_name in ['Diff Points', 'Same Points']:
                 worksheet = writer.sheets[sheet_name]
                 
