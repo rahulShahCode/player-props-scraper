@@ -593,7 +593,7 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
         # Convert lists to DataFrames
         df_diff = pd.DataFrame(diff_pts)
         df_same = pd.DataFrame(same_pts)
-
+        df_diff = df_diff[df_diff['is_favorable'] == 'Y']
         # Define column renaming
         col_names = {
             'commence_time': 'Start Time', 
