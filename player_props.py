@@ -21,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Define Constants
-MY_BOOKMAKERS = ['fanduel', 'draftkings', 'espnbet', 'williamhill_us', 'betmgm', 'pinnacle']
+MY_BOOKMAKERS = ['fanduel', 'draftkings', 'espnbet', 'williamhill_us', 'betmgm', 'betrivers', 'hardrockbet', 'pinnacle']
 SELECTED_BOOK = 'pinnacle'
 ATD_DELTA = 0.01
 API_KEY = os.getenv('THE_ODDS_API_KEY')  # Ensure this environment variable is set
@@ -194,6 +194,33 @@ def american_to_implied(odds):
         return 100 / (odds + 100)
     else:
         return abs(odds) / (abs(odds) + 100)
+    
+def get_projected_value(over_odds, under_odds, point_value):
+    over_prob = american_to_implied(over_odds)
+    under_prob = american_to_implied(under_odds)
+    total_prob = over_prob + under_prob
+    normalized_over_prob = over_prob / total_prob
+    normalized_under_prob = under_prob / total_prob
+    return (normalized_over_prob * (point_value + 0.5)) + (normalized_under_prob * (point_value - 0.5))
+
+def add_projected_values(outcomes):
+    result = []
+    # Group by description and check for Over/Under
+    descriptions = set([outcome['description'] for outcome in outcomes])
+    for desc in descriptions:
+        over = next((o for o in outcomes if o['description'] == desc and o['name'].lower() == 'over'), None)
+        under = next((u for u in outcomes if u['description'] == desc and u['name'].lower() == 'under'), None)
+        
+        if over and under:
+            projected_value = get_projected_value(over['price'], under['price'], over['point'])
+            over['projected_value'] = projected_value
+            under['projected_value'] = projected_value
+            result.append(over)
+            result.append(under)
+    if len(result) == 0:
+        result = outcomes
+    return result
+
 
 def transform_string(input_str):
     """
@@ -269,13 +296,15 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
                     continue  # Pinnacle lines don't exist
 
                 bet_type = transform_string(market['key'])  
-
-                for outcome in market.get('outcomes', []):
-                    pin_outcome = next((o for o in pinnacle_market.get('outcomes', [])
+                outcomes = market.get('outcomes',[])
+                outcomes = add_projected_values(outcomes)
+                pinnacle_outcomes = add_projected_values(pinnacle_market.get('outcomes', []))
+                for outcome in outcomes:
+                    pin_outcome = next((o for o in pinnacle_outcomes
                                         if o['description'] == outcome.get('description') and o['name'] == outcome.get('name')), None)
                     if not pin_outcome:
                         continue  
-
+                     # over_under_exists = any(d['name'] == 'Over' for d in outcome) and any(d['name'] == 'Under' for d in outcome)
                     try:
                         pin_prob = american_to_implied(pin_outcome['price'])
                         other_prob = american_to_implied(outcome['price'])
@@ -296,10 +325,16 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
                     market_type = market.get('key')
                     current_point = outcome.get('point', None)
                     current_odds = outcome.get('price', None)
-
+                    projected_value = outcome.get('projected_value', None)
+                    pin_projected_value = pin_outcome.get('projected_value', None)
+                    projected_val_delta = None 
                     pin_current_point = pin_outcome.get('point', None)
                     pin_current_odds = pin_outcome.get('price', None)
+                    point_move = None 
+                    odds_pct_move = None 
 
+                    if pin_projected_value is not None and projected_value is not None: 
+                        projected_val_delta = pin_projected_value - projected_value
 
                     if outcome_type in ['Over', 'Under', 'Yes']:
                         # Fetch earliest matching entry from the database
@@ -312,7 +347,9 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
 
                         if earliest:
                             earliest_point, earliest_odds = earliest
-
+                            if pin_current_point is not None and earliest_point is not None:
+                                point_move = pin_current_point - earliest_point
+                            odds_pct_move = american_to_implied(pin_current_odds) - american_to_implied(earliest_odds)
                             if outcome_type == 'Over':
                                 if pin_current_point is not None and earliest_point is not None:
                                     if pin_current_point > earliest_point:
@@ -339,7 +376,11 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
                             is_favorable = None  # No earlier entry to compare
                     else:
                         is_favorable = None  # Ignore 'No' scenario
-
+                    abs_point_move, abs_proj_delta = None, None
+                    if point_move is not None: 
+                        abs_point_move = abs(point_move)
+                    if projected_val_delta is not None:
+                        abs_proj_delta = abs(projected_val_delta)
                     # Prepare result entry
                     result_entry = {
                         "commence_time": commence_time,
@@ -350,7 +391,15 @@ def find_favorable_lines(props, event_name: str, commence_time: str):
                         "bet_type": bet_type,
                         "odds": outcome.get('price'),
                         "delta": prob_delta,  # Now a decimal
-                        "is_favorable": is_favorable
+                        "is_favorable": is_favorable,
+                        "point_move" : point_move,
+                        "projected_value" : projected_value,
+                        "pinnacle_projected_val" : pin_projected_value,
+                        "projected_val_delta" : projected_val_delta,
+                        "point_move" : point_move,
+                        "odds_pct_move" : odds_pct_move,
+                        "abs_point_move" : abs_point_move,
+                        "abs_proj_delta" : abs_proj_delta
                     }
 
                     if 'point' in outcome and outcome['point'] is not None:
@@ -544,7 +593,7 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
         # Convert lists to DataFrames
         df_diff = pd.DataFrame(diff_pts)
         df_same = pd.DataFrame(same_pts)
-
+        df_diff = df_diff[df_diff['is_favorable'] == 'Y']
         # Define column renaming
         col_names = {
             'commence_time': 'Start Time', 
@@ -558,7 +607,14 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
             'pinnacle': 'Pinnacle Odds',
             'delta': 'Odds % Delta',
             'point_delta': 'Point Delta',
-            'is_favorable': 'Is Favorable'
+            'is_favorable': 'Is Favorable',
+            'projected_value' : 'Projected Value',
+            'pinnacle_projected_val' : 'Pinnacle Projected Value',
+            'projected_val_delta' : 'Projected Value Delta',
+            "point_move" : "Point Move",
+            "odds_pct_move" : "Odds % Move",
+            "abs_point_move" : "Abs Point Move",
+            "abs_proj_delta" : "Abs Proj Delta" 
         }
 
         # Rename columns
@@ -566,7 +622,7 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
         df_same = df_same.rename(columns=col_names)
 
         # Define desired column order
-        desired_order = [
+        diff_desired_order = [
             'Start Time',
             'Event',
             'Book',
@@ -578,22 +634,39 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
             'Pinnacle Odds',
             'Point Delta',
             'Odds % Delta',
-            'Is Favorable'
+            'Is Favorable',
+            "Abs Proj Delta",
+            "Abs Point Move"
         ]
-
+        same_desired_order = [
+            'Start Time',
+            'Event',
+            'Book',
+            'Player',
+            'Outcome',
+            'Prop',
+            'Point',
+            'Odds',
+            'Pinnacle Odds',
+            'Odds % Delta',
+            'Is Favorable',
+            'Odds % Move'
+        ]
         # Reorder columns if they exist, else add them with default values
-        for df in [df_diff, df_same]:
-            for col in desired_order:
-                if col not in df.columns:
-                    df[col] = 0  # Set default value as 0 or pd.NA
+        for col in diff_desired_order:
+            if col not in df_diff.columns:
+                df_diff[col] = 0  # Set default value as 0 or pd.NA
+        for col in same_desired_order:
+            if col not in df_same.columns:
+                df_same[col] = 0  # Set default value as 0 or pd.NA
 
         # Sort DataFrames: first by 'Point Delta' descending, then by 'Odds Percentage Delta' descending
-        df_diff_sorted = df_diff.sort_values(by=['Point Delta', 'Odds % Delta'], ascending=[False, False])
-        df_same_sorted = df_same.sort_values(by=['Point Delta', 'Odds % Delta'], ascending=[False, False])
+        df_diff_sorted = df_diff.sort_values(by=['Abs Point Move', 'Point Delta'], ascending=[False, False])
+        df_same_sorted = df_same.sort_values(by=['Odds % Move', 'Odds % Delta'], ascending=[False, False])
 
         # Reorder columns
-        df_diff_sorted = df_diff_sorted[desired_order]
-        df_same_sorted = df_same_sorted[desired_order]
+        df_diff_sorted = df_diff_sorted[diff_desired_order]
+        df_same_sorted = df_same_sorted[same_desired_order]
 
         # Create a Pandas Excel writer using openpyxl as the engine
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
@@ -603,7 +676,6 @@ def save_to_excel(diff_pts, same_pts, filename=EXCEL_OUTPUT):
             df_same_sorted.to_excel(writer, sheet_name='Same Points', index=False)
 
             # Access the workbook and sheets
-            workbook = writer.book
             for sheet_name in ['Diff Points', 'Same Points']:
                 worksheet = writer.sheets[sheet_name]
                 
@@ -709,12 +781,12 @@ def main():
     events = get_events(sport)
     diff_pts = [] 
     same_pts = []
+    remove_commenced_games()
     for event in events: 
         props = fetch_props(event['id'], event['sport_key'])
         if not props:
             continue
         store_props(props)
-        remove_commenced_games()
         event_name = f"{event.get('away_team', '')} @ {event.get('home_team', '')}"
         commence_time = convert_utc_to_et(event.get('commence_time', ''))[:-4]
         results = find_favorable_lines(props, event_name, commence_time)  # Process the data
