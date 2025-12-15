@@ -2,6 +2,7 @@ import requests
 from datetime import datetime
 import pytz
 import os
+from dotenv import load_dotenv
 import pandas as pd
 import sqlite3
 import openpyxl
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 MY_BOOKMAKERS = ['fanduel', 'draftkings', 'espnbet', 'williamhill_us', 'betmgm', 'betrivers', 'hardrockbet', 'pinnacle']
 SELECTED_BOOK = 'pinnacle'
 ATD_DELTA = 0.01
+load_dotenv()
 API_KEY = os.getenv('THE_ODDS_API_KEY')  # Ensure this environment variable is set
 SPORTS = ['americanfootball_nfl']
 QUOTA_USED = 0

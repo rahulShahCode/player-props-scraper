@@ -1,2 +1,5 @@
 # Ignore log files
 scraper.log
+
+# Ignore local environment files
+.env
